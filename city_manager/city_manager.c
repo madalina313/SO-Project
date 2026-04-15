@@ -41,6 +41,55 @@ void create_district(const char *district) {
     printf("District '%s' created successfully.\n", district);
 }
 
+void add_report(const char *district, const char *user) {
+    // verificam ca exista folderul districtului
+    struct stat st;
+    if (stat(district, &st) == -1) {
+    // daca nu exista, il cream
+         create_district(district);
+    }
+
+    // citim datele raportului de la tastatura
+    Report r;
+
+    // id-ul e bazat pe timpul curent
+    r.id = (int)time(NULL);
+
+    // numele inspectorului e din --user
+    strncpy(r.inspector, user, sizeof(r.inspector));
+
+    printf("Latitude: ");
+    scanf("%lf", &r.latitude);
+
+    printf("Longitude: ");
+    scanf("%lf", &r.longitude);
+
+    printf("Category (road/lighting/flooding): ");
+    scanf("%s", r.category);
+
+    printf("Severity (1=minor, 2=moderate, 3=critical): ");
+    scanf("%d", &r.severity);
+
+    r.timestamp = time(NULL);
+
+    printf("Description: ");
+    // golim buffer-ul dupa scanf
+    getchar();
+    fgets(r.description, sizeof(r.description), stdin);
+
+    // deschidem reports.dat pentru append (adaugare la sfarsit)
+    char path[256];
+    snprintf(path, sizeof(path), "%s/reports.dat", district);
+    int fd = open(path, O_WRONLY | O_APPEND);
+    if (fd == -1) { perror("open reports.dat failed"); return; }
+
+    // scriem structura Report ca date binare
+    write(fd, &r, sizeof(Report));
+    close(fd);
+
+    printf("Report added successfully! ID: %d\n", r.id);
+    }
+
 int main(int argc, char *argv[]) {
     char role[32] = "";
     char user[64] = "";
@@ -59,7 +108,7 @@ int main(int argc, char *argv[]) {
     }
 
     if (strcmp(command, "add") == 0) {
-        create_district(district);
+        add_report(district,user);
     } else {
          printf("role=%s user=%s command=%s district=%s\n", role, user, command, district);
     }
