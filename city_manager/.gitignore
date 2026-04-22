@@ -1,2 +1,8 @@
+# Fișiere obiect generate la compilare
 *.o
+
+# Executabilul principal
 city_manager
+
+# Executabilul vechi
+p
