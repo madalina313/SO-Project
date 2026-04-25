@@ -117,7 +117,7 @@ void create_district(const char *district) {
  *
  * O_APPEND: fiecare write() se duce la sfârșitul fișierului, ATOMIC.
  * --------------------------------------------------------------- */
-void add_report(const char *district, const char *user) {
+void add_report(const char *district, const char *user, const char *role) {
     struct stat st;
 
     /* Creăm districtul dacă nu există */
@@ -142,14 +142,45 @@ void add_report(const char *district, const char *user) {
     r.id = (int)time(NULL);  /* ID unic bazat pe timestamp Unix */
     strncpy(r.inspector, user, sizeof(r.inspector) - 1);
 
-    printf("Latitude: ");
-    if (scanf("%lf", &r.latitude) != 1) { printf("Invalid input.\n"); return; }
+    /* Validare latitude: repetăm până userul introduce o valoare între -90 și 90 */
+    do {
+        printf("Latitude (-90 to 90): ");
+        if (scanf("%lf", &r.latitude) != 1) {
+            printf("Invalid input.\n");
+            return;
+        }
+        if (r.latitude < -90.0 || r.latitude > 90.0) {
+            printf("Error: latitude must be between -90 and 90. Try again.\n");
+        }
+    } while (r.latitude < -90.0 || r.latitude > 90.0);
 
-    printf("Longitude: ");
-    if (scanf("%lf", &r.longitude) != 1) { printf("Invalid input.\n"); return; }
+    /* Validare longitude: repetăm până userul introduce o valoare între -180 și 180 */
+    do {
+        printf("Longitude (-180 to 180): ");
+        if (scanf("%lf", &r.longitude) != 1) {
+            printf("Invalid input.\n");
+            return;
+        }
+        if (r.longitude < -180.0 || r.longitude > 180.0) {
+            printf("Error: longitude must be between -180 and 180. Try again.\n");
+        }
+    } while (r.longitude < -180.0 || r.longitude > 180.0);
 
-    printf("Category (road/lighting/flooding): ");
-    if (scanf("%31s", r.category) != 1) { printf("Invalid input.\n"); return; }
+    /* Validare category: repetăm până userul introduce road, lighting sau flooding */
+    do {
+        printf("Category (road/lighting/flooding): ");
+        if (scanf("%31s", r.category) != 1) {
+            printf("Invalid input.\n");
+            return;
+        }
+        if (strcmp(r.category, "road")     != 0 &&
+            strcmp(r.category, "lighting") != 0 &&
+            strcmp(r.category, "flooding") != 0) {
+            printf("Error: category must be 'road', 'lighting', or 'flooding'. Try again.\n");
+        }
+    } while (strcmp(r.category, "road")     != 0 &&
+             strcmp(r.category, "lighting") != 0 &&
+             strcmp(r.category, "flooding") != 0);
 
     /* Validare severity: repetăm până userul introduce 1, 2 sau 3 */
     do {
@@ -165,12 +196,19 @@ void add_report(const char *district, const char *user) {
 
     r.timestamp = time(NULL);
 
-    printf("Description: ");
+    /* Validare description: repetăm până userul introduce ceva non-gol */
     getchar();  /* consumăm '\n' rămas în buffer după scanf */
-    if (fgets(r.description, sizeof(r.description), stdin) == NULL) {
-        printf("Invalid input.\n");
-        return;
-    }
+    do {
+        printf("Description (cannot be empty): ");
+        if (fgets(r.description, sizeof(r.description), stdin) == NULL) {
+            printf("Invalid input.\n");
+            return;
+        }
+        /* fgets include '\n' la sfârșit - descrierea e goală dacă primul char e '\n' */
+        if (r.description[0] == '\n') {
+            printf("Error: description cannot be empty. Try again.\n");
+        }
+    } while (r.description[0] == '\n');
 
     /* Deschidem pentru append - adăugăm la sfârșitul fișierului */
     int fd = open(path, O_WRONLY | O_APPEND);
@@ -183,7 +221,7 @@ void add_report(const char *district, const char *user) {
     printf("Report added successfully! ID: %d\n", r.id);
 
     /* Logăm operația */
-    log_operation(district, "inspector", user, "add_report");
+    log_operation(district, role, user, "add_report");
 }
 
 /* ---------------------------------------------------------------
@@ -289,7 +327,7 @@ int main(int argc, char *argv[]) {
         create_district(district);
     }
     else if (strcmp(command, "add") == 0) {
-        add_report(district, user);
+        add_report(district, user, role);
     }
     else if (strcmp(command, "list") == 0) {
         list_reports(district, role, user);

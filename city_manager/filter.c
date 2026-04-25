@@ -217,6 +217,22 @@ void filter_reports(const char *district, const char *condition,
         return;
     }
 
+    /* Validare district: verificăm că directorul există cu stat() */
+    struct stat dst;
+    if (stat(district, &dst) == -1 || !S_ISDIR(dst.st_mode)) {
+        printf("Error: district '%s' does not exist.\n", district);
+        return;
+    }
+
+    /* Validare suplimentară: dacă filtrul e pe severity, valoarea trebuie 1-3 */
+    if (strcmp(cond.field, "severity") == 0) {
+        int sv = atoi(cond.value);
+        if (sv < 1 || sv > 3) {
+            printf("Warning: severity must be between 1 and 3.\n");
+            return;
+        }
+    }
+
     char path[256];
     snprintf(path, sizeof(path), "%s/reports.dat", district);
 

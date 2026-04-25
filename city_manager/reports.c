@@ -23,6 +23,19 @@
 #include "city_manager.h"
 
 /* ---------------------------------------------------------------
+ * district_exists - verifică dacă directorul districtului există
+ *
+ * Folosim stat() pe calea districtului.
+ * S_ISDIR(st.st_mode) verifică dacă intrarea e un director.
+ * Returnează 1 dacă există și e director, 0 altfel.
+ * --------------------------------------------------------------- */
+static int district_exists(const char *district) {
+    struct stat st;
+    if (stat(district, &st) == -1) return 0;
+    return S_ISDIR(st.st_mode);
+}
+
+/* ---------------------------------------------------------------
  * print_report (funcție statică - vizibilă doar în acest fișier)
  *
  * Afișează toate câmpurile unui Report la stdout.
@@ -156,6 +169,11 @@ void create_symlink(const char *district) {
  * 8. log_operation() → scriem în logged_district
  * --------------------------------------------------------------- */
 void list_reports(const char *district, const char *role, const char *user) {
+    if (!district_exists(district)) {
+        printf("Error: district '%s' does not exist.\n", district);
+        return;
+    }
+
     /* Pas 1: asigurăm că symlink-ul există și e valid */
     create_symlink(district);
 
@@ -263,6 +281,11 @@ void list_reports(const char *district, const char *role, const char *user) {
  * --------------------------------------------------------------- */
 void view_report(const char *district, int target_id,
                  const char *role, const char *user) {
+    if (!district_exists(district)) {
+        printf("Error: district '%s' does not exist.\n", district);
+        return;
+    }
+
     char path[256];
     snprintf(path, sizeof(path), "%s/reports.dat", district);
 
@@ -300,8 +323,7 @@ void view_report(const char *district, int target_id,
     close(fd);
 
     if (!found) {
-        printf("Report with ID %d not found in district '%s'.\n",
-               target_id, district);
+        printf("Error: report with ID %d not found.\n", target_id);
     }
 
     log_operation(district, role, user, "view");
@@ -340,6 +362,11 @@ void view_report(const char *district, int target_id,
  * --------------------------------------------------------------- */
 void remove_report_cmd(const char *district, int target_id,
                        const char *role, const char *user) {
+    if (!district_exists(district)) {
+        printf("Error: district '%s' does not exist.\n", district);
+        return;
+    }
+
     /* Restricție de rol: doar managerul poate șterge rapoarte */
     if (strcmp(role, "manager") != 0) {
         printf("Error: only 'manager' role can remove reports.\n");
@@ -417,7 +444,7 @@ void remove_report_cmd(const char *district, int target_id,
     }
 
     if (found_idx == -1) {
-        printf("Report with ID %d not found.\n", target_id);
+        printf("Error: report with ID %d not found.\n", target_id);
         close(fd);
         return;
     }
@@ -474,6 +501,11 @@ void remove_report_cmd(const char *district, int target_id,
  * --------------------------------------------------------------- */
 void update_threshold(const char *district, int new_value,
                       const char *role, const char *user) {
+    if (!district_exists(district)) {
+        printf("Error: district '%s' does not exist.\n", district);
+        return;
+    }
+
     /* Restricție de rol */
     if (strcmp(role, "manager") != 0) {
         printf("Error: only 'manager' role can update threshold.\n");

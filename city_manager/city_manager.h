@@ -104,6 +104,6 @@ void filter_reports(const char *district, const char *condition,
  * Declarații funcții din city_manager.c
  * --------------------------------------------------------------- */
 void create_district(const char *district);
-void add_report(const char *district, const char *user);
+void add_report(const char *district, const char *user, const char *role);
 
 #endif /* CITY_MANAGER_H */
