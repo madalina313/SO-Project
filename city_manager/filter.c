@@ -98,6 +98,15 @@ static int parse_condition(const char *cond_str, Condition *cond) {
     strncpy(cond->field, cond_str, field_len);
     cond->field[field_len] = '\0';  /* terminăm string-ul manual */
 
+    /* Trim: eliminăm spațiile de la sfârșitul field-ului.
+     * Dacă userul scrie "severity >=2", field devine "severity " fără trim.
+     * Mergem de la sfârșit spre stânga și înlocuim spațiile cu '\0'. */
+    int trim = field_len - 1;
+    while (trim >= 0 && cond->field[trim] == ' ') {
+        cond->field[trim] = '\0';
+        trim--;
+    }
+
     /* Extragem valoarea: tot ce e după operator */
     const char *val_start = pos + strlen(cond->op);
     if (*val_start == '\0') {

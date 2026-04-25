@@ -151,8 +151,17 @@ void add_report(const char *district, const char *user) {
     printf("Category (road/lighting/flooding): ");
     if (scanf("%31s", r.category) != 1) { printf("Invalid input.\n"); return; }
 
-    printf("Severity (1=minor, 2=moderate, 3=critical): ");
-    if (scanf("%d", &r.severity) != 1) { printf("Invalid input.\n"); return; }
+    /* Validare severity: repetăm până userul introduce 1, 2 sau 3 */
+    do {
+        printf("Severity (1=minor, 2=moderate, 3=critical): ");
+        if (scanf("%d", &r.severity) != 1) {
+            printf("Invalid input.\n");
+            return;
+        }
+        if (r.severity < 1 || r.severity > 3) {
+            printf("Error: severity must be 1, 2, or 3. Try again.\n");
+        }
+    } while (r.severity < 1 || r.severity > 3);
 
     r.timestamp = time(NULL);
 
@@ -193,6 +202,14 @@ void add_report(const char *district, const char *user) {
  *   condition → condiția de filtrare (pentru --filter)
  * --------------------------------------------------------------- */
 int main(int argc, char *argv[]) {
+    /*
+     * umask(0) dezactivează filtrul de permisiuni al procesului.
+     * Fără asta, umask-ul shell-ului (de obicei 022) ar putea elimina biți
+     * din permisiunile cerute la open()/mkdir().
+     * Apelând umask(0) devreme în main(), toate operațiile ulterioare
+     * folosesc exact permisiunile pe care le specificăm noi cu chmod().
+     */
+    umask(0);
     char role[32]      = "";
     char user[64]      = "";
     char command[32]   = "";
