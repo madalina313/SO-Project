@@ -208,6 +208,31 @@ void list_reports(const char *district, const char *role, const char *user) {
     printf("Size        : %lld bytes\n", (long long)st.st_size);
     printf("Last modified: %s\n",   timebuf);
 
+    /*
+     * Citim threshold-ul din district.cfg cu open() + read().
+     * Formatul fișierului: "threshold=N\n"
+     * Pași:
+     *   1. open() pe district.cfg cu O_RDONLY
+     *   2. read() conținutul în buffer
+     *   3. strstr() găsește "threshold=" în buffer
+     *   4. atoi() convertește ce urmează după "=" la int
+     */
+    char cfg_path[256];
+    snprintf(cfg_path, sizeof(cfg_path), "%s/district.cfg", district);
+    int cfg_fd = open(cfg_path, O_RDONLY);
+    if (cfg_fd != -1) {
+        char cfg_buf[64];
+        ssize_t n = read(cfg_fd, cfg_buf, sizeof(cfg_buf) - 1);
+        close(cfg_fd);
+        if (n > 0) {
+            cfg_buf[n] = '\0';
+            char *pos = strstr(cfg_buf, "threshold=");
+            if (pos) {
+                printf("Severity threshold: %d\n", atoi(pos + 10)); /* 10 = strlen("threshold=") */
+            }
+        }
+    }
+
     /* Pas 6: verificăm statusul symlink-ului cu lstat() */
     char link_name[256];
     snprintf(link_name, sizeof(link_name), "active_reports-%s", district);

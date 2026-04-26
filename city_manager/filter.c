@@ -194,49 +194,59 @@ static int match_condition(const Report *r, const Condition *cond) {
 /* ---------------------------------------------------------------
  * filter_reports
  *
- * Funcția principală de filtrare. Citește toate rapoartele și
- * le afișează pe cele care satisfac condiția.
+ * Filtrează rapoartele după mai multe condiții cu logică AND.
+ * Un raport e afișat doar dacă satisface TOATE condițiile din array.
  *
  * Pași:
- *   1. parse_condition() → parsăm string-ul condiției
- *   2. check_read_permission() → verificăm acces cu stat()
- *   3. open() + buclă read() → citim rapoartele
- *   4. match_condition() → filtrăm
- *   5. log_operation() → logăm
+ *   1. Validare de bază: cel puțin o condiție, districtul există
+ *   2. Parsăm TOATE condițiile cu parse_condition() → array de Condition
+ *   3. Validăm severity dacă e printre câmpuri
+ *   4. check_read_permission() cu stat()
+ *   5. open() + buclă read()
+ *   6. Pentru fiecare raport: match_condition() pe TOATE condițiile (AND)
+ *   7. log_operation()
+ *
+ * De ce array de Condition și nu verificare pe string-uri direct?
+ *   Parsăm o singură dată la început, nu la fiecare raport.
+ *   Evităm parsarea repetată (O(N*M) parsări → O(M) parsări + O(N*M) comparații)
  * --------------------------------------------------------------- */
-void filter_reports(const char *district, const char *condition,
+void filter_reports(const char *district,
+                    const char *conditions[], int num_conditions,
                     const char *role, const char *user) {
-    /* Pas 1: parsăm condiția - dacă e invalidă, ne oprim */
-    if (condition == NULL || condition[0] == '\0') {
+    /* Pas 1: trebuie cel puțin o condiție */
+    if (num_conditions == 0) {
         printf("Error: no filter condition specified. Use --condition \"field=value\"\n");
         return;
     }
 
-    Condition cond;
-    if (parse_condition(condition, &cond) == -1) {
-        return;
-    }
-
-    /* Validare district: verificăm că directorul există cu stat() */
+    /* Validare district cu stat() */
     struct stat dst;
     if (stat(district, &dst) == -1 || !S_ISDIR(dst.st_mode)) {
         printf("Error: district '%s' does not exist.\n", district);
         return;
     }
 
-    /* Validare suplimentară: dacă filtrul e pe severity, valoarea trebuie 1-3 */
-    if (strcmp(cond.field, "severity") == 0) {
-        int sv = atoi(cond.value);
-        if (sv < 1 || sv > 3) {
-            printf("Warning: severity must be between 1 and 3.\n");
-            return;
+    /* Pas 2: parsăm toate condițiile într-un array de structuri Condition */
+    Condition conds[MAX_CONDITIONS];
+    for (int i = 0; i < num_conditions; i++) {
+        if (parse_condition(conditions[i], &conds[i]) == -1) {
+            return;  /* o condiție invalidă → oprim totul */
+        }
+        /* Pas 3: validare severity pentru fiecare condiție */
+        if (strcmp(conds[i].field, "severity") == 0) {
+            int sv = atoi(conds[i].value);
+            if (sv < 1 || sv > 3) {
+                printf("Warning: severity must be between 1 and 3 (condition: %s)\n",
+                       conditions[i]);
+                return;
+            }
         }
     }
 
     char path[256];
     snprintf(path, sizeof(path), "%s/reports.dat", district);
 
-    /* Pas 2: verificare permisiuni cu stat() */
+    /* Pas 4: verificare permisiuni cu stat() */
     if (!check_read_permission(path, role)) {
         printf("Error: role '%s' does not have read permission on %s\n",
                role, path);
@@ -244,23 +254,42 @@ void filter_reports(const char *district, const char *condition,
         return;
     }
 
-    /* Pas 3: deschidem fișierul */
+    /* Pas 5: deschidem fișierul */
     int fd = open(path, O_RDONLY);
     if (fd == -1) {
         perror("open reports.dat failed");
         return;
     }
 
-    printf("=== Filter: [%s] | district: %s ===\n\n", condition, district);
+    /* Afișăm toate condițiile active */
+    printf("=== Filter: ");
+    for (int i = 0; i < num_conditions; i++) {
+        printf("[%s]", conditions[i]);
+        if (i < num_conditions - 1) printf(" AND ");
+    }
+    printf(" | district: %s ===\n\n", district);
 
     Report r;
     int count = 0;
     int total = 0;
 
-    /* Pas 4: citim și filtrăm */
+    /* Pas 6: citim și filtrăm cu AND pe toate condițiile */
     while (read(fd, &r, sizeof(Report)) == (ssize_t)sizeof(Report)) {
         total++;
-        if (match_condition(&r, &cond)) {
+
+        /*
+         * AND logic: raportul trebuie să satisfacă TOATE condițiile.
+         * Dacă o condiție nu e satisfăcută, trecem la raportul următor.
+         */
+        int all_match = 1;
+        for (int i = 0; i < num_conditions; i++) {
+            if (!match_condition(&r, &conds[i])) {
+                all_match = 0;
+                break;
+            }
+        }
+
+        if (all_match) {
             char ts[64];
             struct tm *tm_info = localtime(&r.timestamp);
             strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", tm_info);
@@ -280,8 +309,13 @@ void filter_reports(const char *district, const char *condition,
 
     printf("Matched %d of %d report(s).\n", count, total);
 
-    /* Pas 5: logăm operația cu condiția inclusă */
+    /* Pas 7: logăm toate condițiile folosite */
     char log_msg[200];
-    snprintf(log_msg, sizeof(log_msg), "filter(%s)", condition);
+    int offset = snprintf(log_msg, sizeof(log_msg), "filter(");
+    for (int i = 0; i < num_conditions && offset < (int)sizeof(log_msg) - 2; i++) {
+        offset += snprintf(log_msg + offset, sizeof(log_msg) - offset,
+                           "%s%s", conditions[i], i < num_conditions - 1 ? " AND " : "");
+    }
+    snprintf(log_msg + offset, sizeof(log_msg) - offset, ")");
     log_operation(district, role, user, log_msg);
 }

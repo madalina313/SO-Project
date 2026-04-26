@@ -94,10 +94,17 @@ void update_threshold(const char *district, int new_value,
  * Declarații funcții din filter.c
  * --------------------------------------------------------------- */
 
+/* MAX_CONDITIONS - numărul maxim de condiții --condition acceptate */
+#define MAX_CONDITIONS 8
+
 /*
- * filter_reports - filtrează rapoartele după o condiție (ex: "severity>=2")
+ * filter_reports - filtrează rapoartele după mai multe condiții (AND)
+ * conditions: array de string-uri de condiții (ex: "severity>=2")
+ * num_conditions: câte condiții sunt în array
+ * Toate condițiile trebuie satisfăcute simultan (AND logic)
  */
-void filter_reports(const char *district, const char *condition,
+void filter_reports(const char *district,
+                    const char *conditions[], int num_conditions,
                     const char *role, const char *user);
 
 /* ---------------------------------------------------------------

@@ -248,13 +248,19 @@ int main(int argc, char *argv[]) {
      * folosesc exact permisiunile pe care le specificăm noi cu chmod().
      */
     umask(0);
-    char role[32]      = "";
-    char user[64]      = "";
-    char command[32]   = "";
-    char district[64]  = "";
-    char condition[128]= "";
-    int  target_id     = 0;
+    char role[32]     = "";
+    char user[64]     = "";
+    char command[32]  = "";
+    char district[64] = "";
+    int  target_id    = 0;
     int  threshold_val = 0;
+    /*
+     * Array de condiții pentru --filter.
+     * Stocăm pointeri direct în argv[] - sunt valizi pe toată durata main().
+     * MAX_CONDITIONS e definit în header.
+     */
+    const char *conditions[MAX_CONDITIONS];
+    int num_conditions = 0;
 
     /* Parcurgem argumentele din linia de comandă */
     for (int i = 1; i < argc; i++) {
@@ -300,7 +306,13 @@ int main(int argc, char *argv[]) {
             threshold_val = atoi(argv[++i]);
         }
         else if (strcmp(argv[i], "--condition") == 0 && i + 1 < argc) {
-            strncpy(condition, argv[++i], sizeof(condition) - 1);
+            if (num_conditions < MAX_CONDITIONS) {
+                conditions[num_conditions++] = argv[++i];
+            } else {
+                printf("Warning: maximum %d conditions allowed, ignoring extra.\n",
+                       MAX_CONDITIONS);
+                i++;  /* consumăm argumentul ignorat */
+            }
         }
     }
 
@@ -342,7 +354,7 @@ int main(int argc, char *argv[]) {
         update_threshold(district, threshold_val, role, user);
     }
     else if (strcmp(command, "filter") == 0) {
-        filter_reports(district, condition, role, user);
+        filter_reports(district, conditions, num_conditions, role, user);
     }
     else {
         printf("Unknown command: '%s'\n", command);
