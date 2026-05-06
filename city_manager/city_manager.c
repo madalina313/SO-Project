@@ -34,6 +34,7 @@
 #include <time.h>        /* time() */
 #include <unistd.h>      /* close(), write() */
 #include "city_manager.h"
+#include <sys/wait.h>
 
 /* ---------------------------------------------------------------
  * create_district
@@ -225,6 +226,70 @@ void add_report(const char *district, const char *user, const char *role) {
 }
 
 /* ---------------------------------------------------------------
+ * remove_district
+ *
+ * Sterge un district intreg si symlink-ul corespunzator.
+ * Doar pentru manager.
+ *
+ * Cum functioneaza:
+ * 1. fork() creaza un proces copil identic cu parintele
+ * 2. In procesul copil apelam execvp() care inlocuieste procesul
+ *    cu comanda "rm -rf <district>"
+ * 3. Parintele asteapta cu waitpid() pana copilul termina
+ * --------------------------------------------------------------- */
+void remove_district(const char *district, const char *role) {
+    /* Doar managerul poate sterge districte */
+    if (strcmp(role, "manager") != 0) {
+        printf("Error: only 'manager' role can remove districts.\n");
+        return;
+    }
+
+    /* Verificam ca districtul exista */
+    struct stat st;
+    if (stat(district, &st) == -1) {
+        printf("Error: district '%s' does not exist.\n", district);
+        return;
+    }
+
+    /* Cream procesul copil */
+    pid_t pid = fork();
+
+    if (pid == -1) {
+        /* fork() a esuat */
+        perror("fork failed");
+        return;
+    }
+
+    if (pid == 0) {
+        /* ---- PROCESUL COPIL ---- */
+        /* execvp inlocuieste procesul curent cu "rm -rf <district>" */
+        char *args[] = { "rm", "-rf", (char *)district, NULL };
+        execvp("rm", args);
+
+        /* Daca ajungem aici, execvp a esuat */
+        perror("execvp failed");
+        _exit(1);
+    }
+
+    /* ---- PROCESUL PARINTE ---- */
+    /* Asteptam sa termine copilul */
+    int status;
+    waitpid(pid, &status, 0);
+
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 0) {
+        printf("District '%s' deleted successfully.\n", district);
+
+        /* Stergem si symlink-ul */
+        char symlink_name[256];
+        snprintf(symlink_name, sizeof(symlink_name), "active_reports-%s", district);
+        unlink(symlink_name);
+        printf("Symlink '%s' removed.\n", symlink_name);
+    } else {
+        printf("Error: failed to delete district '%s'.\n", district);
+    }
+}
+
+/* ---------------------------------------------------------------
  * main - parser de argumente și dispatcher de comenzi
  *
  * Parcurgem argv[] secvențial. Când găsim o opțiune care ia un argument
@@ -305,6 +370,10 @@ int main(int argc, char *argv[]) {
         else if (strcmp(argv[i], "--value") == 0 && i + 1 < argc) {
             threshold_val = atoi(argv[++i]);
         }
+        else if (strcmp(argv[i], "--remove_district") == 0 && i + 1 < argc) {
+            strcpy(command, "remove_district");
+            strncpy(district, argv[++i], sizeof(district) - 1);
+        }
         else if (strcmp(argv[i], "--condition") == 0 && i + 1 < argc) {
             if (num_conditions < MAX_CONDITIONS) {
                 conditions[num_conditions++] = argv[++i];
@@ -355,6 +424,9 @@ int main(int argc, char *argv[]) {
     }
     else if (strcmp(command, "filter") == 0) {
         filter_reports(district, conditions, num_conditions, role, user);
+    }
+    else if (strcmp(command, "remove_district") == 0) {
+        remove_district(district, role);
     }
     else {
         printf("Unknown command: '%s'\n", command);
