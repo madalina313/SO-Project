@@ -35,6 +35,7 @@
 #include <unistd.h>      /* close(), write() */
 #include "city_manager.h"
 #include <sys/wait.h>
+#include <signal.h>      /* kill(), SIGUSR1 */
 
 /* ---------------------------------------------------------------
  * create_district
@@ -223,6 +224,48 @@ void add_report(const char *district, const char *user, const char *role) {
 
     /* Logăm operația */
     log_operation(district, role, user, "add_report");
+
+    /*
+     * Notificăm monitor_reports dacă rulează.
+     *
+     * Cum funcționează:
+     *   1. Încercăm să deschidem .monitor_pid cu open() (O_RDONLY)
+     *   2. Dacă fișierul nu există → open() returnează -1 → notify_monitor_FAIL
+     *   3. Dacă există, citim PID-ul ca șir de caractere cu read()
+     *   4. Dacă read() eșuează sau PID invalid → notify_monitor_FAIL
+     *   5. kill(pid, SIGUSR1) trimite semnalul - dacă returnează 0, a reușit
+     *   6. Logăm rezultatul (OK sau FAIL) în logged_district în toate cazurile
+     */
+    {
+        int notify_ok = 0;  /* presupunem eșec până dovedim succesul */
+
+        int pid_fd = open(".monitor_pid", O_RDONLY);
+        if (pid_fd != -1) {
+            char pid_buf[32];
+            memset(pid_buf, 0, sizeof(pid_buf));
+            ssize_t n = read(pid_fd, pid_buf, sizeof(pid_buf) - 1);
+            close(pid_fd);
+
+            if (n > 0) {
+                pid_t monitor_pid = (pid_t)atoi(pid_buf);
+                if (monitor_pid > 0 && kill(monitor_pid, SIGUSR1) == 0) {
+                    notify_ok = 1;
+                }
+            }
+        }
+
+        if (notify_ok) {
+            log_operation(district, role, user, "notify_monitor_OK");
+        } else {
+            /* Acoperă toate cazurile de eșec:
+             *   - .monitor_pid nu există (monitorul nu rulează)
+             *   - read() a eșuat sau fișier gol
+             *   - PID invalid (≤ 0)
+             *   - kill() a eșuat (monitorul s-a oprit între timp)
+             */
+            log_operation(district, role, user, "notify_monitor_FAIL");
+        }
+    }
 }
 
 /* ---------------------------------------------------------------
