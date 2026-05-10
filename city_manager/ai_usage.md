@@ -29,3 +29,8 @@ return -1
 - how lseek() and ftruncate() work to delete a record from a binary file
 - difference between stat() and lstat() when working with symlinks
 - that AI code isn't always correct and you need to actually read and test it
+
+## Phase 2
+
+### What I used AI for
+I used AI as an assistant to understand how signals and processes work in Unix, and to help structure the implementation of `monitor_reports.c` and the modifications to `add_report`.
